@@ -1,4 +1,4 @@
-https://xieyoujune.github.io/macOS-Icon-Generator/
+请点击这里使用软件 / Please click here ：https://xieyoujune.github.io/macOS-Icon-Generator/
   
 macOS App Icon Generator (Web-Based)
 一个纯前端实现的 macOS 应用图标生成工具，旨在帮助开发者快速将普通图片转换为符合 Apple Human Interface Guidelines (HIG) 规范的 .icns 图标文件。  
