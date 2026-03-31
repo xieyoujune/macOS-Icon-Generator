@@ -2,214 +2,285 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>macOS 图标生成器</title>
-  
-  <!-- 网页 Favicon 和 PWA (iOS/Android) 桌面图标 -->
-  <link rel="icon" href="others/icon.png" type="image/png">
-  <link rel="apple-touch-icon" href="others/icon.png">
-  
-  <!-- <link rel="manifest" href="others/manifest.json"> -->
 
-  <!-- 引入 Tailwind CSS 进行页面样式渲染 -->
+  <!-- 引入 Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- 引入 Lucide 图标库 -->
   <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* 全局系统字体设定 */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      /* 禁用选中，增强 App 沉浸感 */
+      user-select: none; 
+      -webkit-user-select: none;
+    }
+
+    /* 隐藏滚动条但保留滚动功能（备用） */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* GBG 规范：自定义 Slider 控件 */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+    }
+    input[type=range]:focus {
+      outline: none;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 4px;
+      cursor: pointer;
+      background: #e5e7eb; /* bg-gray-200 */
+      border-radius: 9999px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 14px;
+      width: 14px;
+      border-radius: 50%;
+      background: #1f2937; /* bg-gray-800 */
+      margin-top: -5px;
+      cursor: pointer;
+    }
+
+    /* 棋盘格背景 (用于透明色块和画布预览，不使用 border) */
+    .checkerboard {
+      background-image: 
+        repeating-linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), 
+        repeating-linear-gradient(45deg, #e5e7eb 25%, #ffffff 25%, #ffffff 75%, #e5e7eb 75%, #e5e7eb); 
+      background-position: 0 0, 10px 10px; 
+      background-size: 20px 20px;
+    }
+
+    /* 画布自适应约束 */
+    #previewCanvas {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+  </style>
 </head>
-<body class="min-h-screen bg-gray-50 p-6 font-sans text-gray-800">
-  <div class="max-w-5xl mx-auto">
-    <!-- Header -->
-    <header class="mb-8 text-center sm:text-left">
-      <h1 class="text-3xl font-bold text-gray-900 flex items-center justify-center sm:justify-start gap-3">
-        <i data-lucide="image" class="w-8 h-8 text-blue-500"></i>
-        macOS 图标生成器
-      </h1>
-      <p class="text-gray-500 mt-2 text-sm sm:text-base">
-        参考 macOS Human Interface Guidelines (HIG) 规范，将图片转换为标准 App Icon (.icns) 文件。
-      </p>
+<!-- 规范：100dvh, overflow-hidden, padding 16px, background色差区分 -->
+<body class="h-[100dvh] w-screen overflow-hidden bg-gray-200 text-gray-800 p-[16px]">
+
+  <!-- 隐藏的文件输入组件 -->
+  <input type="file" id="uploadInput" class="hidden" accept="image/png, image/jpeg, image/webp" />
+
+  <!-- 规范：最大宽度1400px, 间距16px, 纵向 Header + Main -->
+  <div class="max-w-[1400px] mx-auto h-full flex flex-col gap-[16px]">
+    
+    <!-- HEADER -->
+    <header class="flex-none bg-white py-3 px-6 rounded-[28px] flex items-center justify-between relative z-10">
+      
+      <!-- 隐藏菜单 (头像连击触发) -->
+      <div id="secretMenu" class="hidden absolute top-[70px] left-6 bg-gray-100 rounded-[20px] p-4 z-50 w-[240px]">
+        <div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Developer Rules</div>
+        <div class="flex flex-col gap-2">
+          <button class="w-full text-left py-3 px-4 bg-white rounded-[16px] text-[10px] font-black text-gray-900 uppercase tracking-widest hover:bg-gray-50 transition-colors">Upload UI Rules</button>
+          <button class="w-full text-left py-3 px-4 bg-white rounded-[16px] text-[10px] font-black text-gray-900 uppercase tracking-widest hover:bg-gray-50 transition-colors">Download UI Rules</button>
+        </div>
+      </div>
+
+      <!-- 左侧：应用与用户信息 -->
+      <div class="flex items-center">
+        <!-- 规范：全站唯一圆形 50% radius, 44x44 -->
+        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=GBG&backgroundColor=f3f4f6" id="header_avatar_image" class="w-[44px] h-[44px] rounded-[50%] object-cover cursor-pointer hover:opacity-80 transition-opacity" alt="avatar" title="Click 3 times">
+        
+        <div class="ml-4 hidden sm:flex flex-col justify-center">
+          <div class="text-xl font-black text-gray-900 leading-none tracking-tight">GBG ADMIN</div>
+          <div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">WORKSPACE</div>
+        </div>
+        
+        <!-- 规范：1px width, 32px height, bg-gray-200 -->
+        <div class="w-[1px] h-[32px] bg-gray-200 mx-[16px] hidden sm:block"></div>
+        
+        <div class="flex flex-col justify-center">
+          <div class="text-xl font-black text-gray-900 leading-none tracking-tight">ICNS FORGE</div>
+          <div class="text-[10px] font-black uppercase tracking-widest text-gray-400 mt-1">MACOS GENERATOR</div>
+        </div>
+      </div>
+
+      <!-- 右侧：操作按钮组 -->
+      <div class="flex items-center gap-[8px]">
+        <!-- 规范：bg-gray-100, text-gray-800, padding, rounded-16px -->
+        <button id="headerUploadBtn" class="bg-gray-100 text-gray-800 py-[10px] px-[24px] rounded-[16px] text-[11px] font-black uppercase tracking-widest hover:bg-gray-200 transition-colors">
+          上传
+        </button>
+        <!-- 规范：bg-gray-400, text-white -->
+        <button id="headerExportBtn" class="bg-gray-400 text-white py-[10px] px-[24px] rounded-[16px] text-[11px] font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 cursor-not-allowed opacity-50">
+          <span id="exportText">导出</span>
+        </button>
+        <button class="bg-gray-100 text-gray-800 p-[10px] px-[16px] rounded-[16px] hover:bg-gray-200 transition-colors flex items-center justify-center">
+          <i data-lucide="coffee" class="w-[20px] h-[20px]"></i>
+        </button>
+      </div>
     </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- MAIN GRID: Left(320px) + Center(flex-1) + Right(320px) -->
+    <main class="flex-1 flex gap-[16px] min-h-0">
       
-      <!-- 左侧：设置区域 -->
-      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-6 order-2 lg:order-1">
-        
-        <!-- 上传区域 -->
+      <!-- LEFT COLUMN: Settings -->
+      <aside class="w-[320px] flex-shrink-0 bg-white rounded-[28px] p-6 flex flex-col gap-6 overflow-y-auto">
         <div>
-          <label class="block text-sm font-semibold text-gray-700 mb-2">1. 上传原图 (PNG/JPG)</label>
-          <!-- 增加 id="dropZone" 以便绑定拖拽事件 -->
-          <label id="dropZone" class="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-blue-400 transition-colors">
-            <div class="flex flex-col items-center justify-center pt-5 pb-6 pointer-events-none">
-              <i data-lucide="upload-cloud" class="w-10 h-10 mb-3 text-gray-400"></i>
-              <p class="mb-2 text-sm text-gray-500"><span class="font-semibold text-blue-600">点击上传</span> 或拖拽图片至此处</p>
-              <p class="text-xs text-gray-400">建议使用 1024x1024 像素的图片</p>
-            </div>
-            <input type="file" id="uploadInput" class="hidden" accept="image/png, image/jpeg, image/webp" />
-          </label>
-        </div>
-
-        <!-- 参数调整区域 -->
-        <div id="settingsArea" class="transition-opacity duration-300 opacity-50 pointer-events-none">
-          <div class="flex items-center gap-2 mb-4">
-            <i data-lucide="settings" class="w-5 h-5 text-gray-700"></i>
-            <h2 class="text-sm font-semibold text-gray-700">2. 调整 macOS 风格参数</h2>
-          </div>
-
-          <div class="space-y-5 bg-gray-50 p-4 rounded-xl">
-            <!-- 应用样式开关 -->
-            <label class="flex items-center justify-between cursor-pointer" id="applyStyleContainer">
-              <span class="text-sm font-medium text-gray-700">应用 macOS 规范样式</span>
-              <div class="relative">
-                <input type="checkbox" id="applyStyleCheck" class="sr-only" checked />
-                <div id="toggleBg" class="block w-14 h-8 rounded-full transition-colors bg-blue-500"></div>
-                <div id="toggleDot" class="absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform transform translate-x-6"></div>
-              </div>
-            </label>
-
-            <!-- 动态隐藏显示的详细设置 -->
-            <div id="styleSettings" class="space-y-5">
-              <!-- 外边距滑块 -->
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="text-gray-600">外边距 (预留投影空间)</span>
-                  <span id="paddingValueText" class="text-gray-500 font-mono">10%</span>
-                </div>
-                <input 
-                  type="range" 
-                  id="paddingSlider"
-                  min="0" max="25" 
-                  value="10" 
-                  class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-                <p class="text-xs text-gray-400 mt-1">macOS 规范通常预留 10% 空间以显示系统阴影。</p>
-              </div>
-
-              <!-- 背景色选择 -->
-              <div>
-                <span class="block text-sm text-gray-600 mb-2">背景填充颜色 (针对透明图片)</span>
-                <div class="flex gap-3" id="colorButtons">
-                  <!-- JS 动态渲染 -->
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 生成按钮 -->
-        <div class="mt-auto pt-4">
-          <button
-            id="generateBtn"
-            disabled
-            class="w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 text-white font-medium transition-all bg-gray-300 cursor-not-allowed"
-          >
-            <span id="btnTextDefault" class="flex items-center justify-center gap-2">
-              <i data-lucide="download" class="w-5 h-5"></i>
-              下载 app.icns 文件
-            </span>
-            <span id="btnTextGenerating" class="hidden flex items-center justify-center gap-2">
-              <span class="animate-pulse">正在处理...</span>
-            </span>
-          </button>
-          <div id="successMsg" class="hidden mt-3 flex items-center justify-center gap-2 text-sm text-green-600 font-medium">
-            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-            <span id="successText"></span>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- 右侧：实时预览及说明区域 -->
-      <div class="flex flex-col gap-6 order-1 lg:order-2 lg:sticky lg:top-6 lg:self-start w-full">
-        
-        <!-- 实时预览区域 -->
-        <div class="bg-gray-200/50 p-8 rounded-2xl flex flex-col items-center justify-center border border-gray-100 min-h-[320px] lg:min-h-[400px] relative overflow-hidden">
-          <div class="absolute top-4 left-4 flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm text-xs font-medium text-gray-600">
-            <i data-lucide="info" class="w-4 h-4"></i>
-            1024x1024 实时预览
-          </div>
-
-          <div id="canvasPreviewWrapper" class="relative group hidden">
-            <!-- 棋盘格背景用于显示透明度 -->
-            <div class="absolute inset-0 rounded-3xl" style="background-image: repeating-linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%, #e5e7eb), repeating-linear-gradient(45deg, #e5e7eb 25%, #ffffff 25%, #ffffff 75%, #e5e7eb 75%, #e5e7eb); background-position: 0 0, 10px 10px; background-size: 20px 20px; z-index: 0;"></div>
-            <canvas 
-              id="previewCanvas"
-              class="w-64 h-64 sm:w-80 sm:h-80 relative z-10 transition-transform group-hover:scale-105 duration-300"
-              style="filter: drop-shadow(0 20px 30px rgba(0,0,0,0.1))"
-            ></canvas>
-          </div>
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Settings Module</h2>
           
-          <div id="emptyPreview" class="flex flex-col items-center justify-center text-gray-400">
-            <i data-lucide="image" class="w-16 h-16 mb-4 opacity-50"></i>
-            <p>请先在左侧上传图片</p>
+          <div id="settingsArea" class="flex flex-col gap-4 transition-opacity duration-300 opacity-30 pointer-events-none">
+            
+            <!-- 应用规范 Toggle -->
+            <div class="bg-gray-50 rounded-[24px] p-5 flex items-center justify-between cursor-pointer" id="applyStyleContainer">
+              <span class="text-[11px] font-black uppercase tracking-widest text-gray-800">macOS Style</span>
+              <div class="relative w-12 h-6 bg-gray-800 rounded-full transition-colors" id="toggleBg">
+                <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform translate-x-6" id="toggleDot"></div>
+              </div>
+            </div>
+
+            <div id="styleSettings" class="flex flex-col gap-4">
+              <!-- 滑块控制 -->
+              <div class="bg-gray-50 rounded-[24px] p-5">
+                <div class="flex justify-between items-center mb-3">
+                  <span class="text-[10px] font-black uppercase tracking-widest text-gray-400">Margin Size</span>
+                  <span id="paddingValueText" class="font-mono font-black text-[12px] text-gray-800">10%</span>
+                </div>
+                <input type="range" id="paddingSlider" min="0" max="25" value="10" />
+              </div>
+
+              <!-- 背景色选择 (绝对无边框，依赖缩放与透明度表示选中态) -->
+              <div class="bg-gray-50 rounded-[24px] p-5">
+                <span class="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3">Background Color</span>
+                <div class="flex gap-3" id="colorButtons">
+                  <!-- 动态插入颜色按钮 -->
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTER COLUMN: Canvas Workspace -->
+      <section id="dropZone" class="flex-1 bg-white rounded-[28px] relative overflow-hidden flex flex-col items-center justify-center cursor-pointer transition-colors hover:bg-gray-50 group">
+        
+        <!-- 空状态提示 -->
+        <div id="emptyPreview" class="flex flex-col items-center justify-center text-gray-300 transition-opacity">
+          <i data-lucide="image-plus" class="w-[64px] h-[64px] mb-4"></i>
+          <p class="text-[14px] font-black uppercase tracking-widest">Click or Drop Image Here</p>
+        </div>
+
+        <!-- 预览区域 (内部实现) -->
+        <div id="canvasPreviewWrapper" class="hidden absolute inset-0 flex items-center justify-center p-8 pointer-events-none">
+          <div class="relative w-full h-full max-w-[512px] max-h-[512px] flex items-center justify-center">
+             <!-- 棋盘格底层 -->
+            <div class="absolute inset-0 rounded-[24px] checkerboard z-0 opacity-50"></div>
+            <!-- 生成图预览 (此处不加 CSS shadow，完全依赖内部渲染，符合规范) -->
+            <canvas id="previewCanvas" class="relative z-10 w-full h-full transition-transform duration-500 group-hover:scale-105"></canvas>
           </div>
         </div>
 
-        <!-- 信息说明 -->
-        <div class="bg-blue-50 text-blue-800 p-4 rounded-xl text-sm leading-relaxed">
-          <h3 class="font-semibold flex items-center gap-2 mb-2">
-            <i data-lucide="info" class="w-4 h-4"></i>
-            关于 macOS HIG 图标规范
-          </h3>
-          <ul class="list-disc list-inside space-y-1 opacity-80">
-            <li><strong>形状：</strong> 现代 macOS 图标使用称为 <b>Squircle</b> (平滑圆角矩形) 的形状。本工具严格模拟了该曲线并加入了微妙的内部高光。</li>
-            <li><strong>多分辨率支持：</strong> 导出的 <code>.icns</code> 文件内部包含了从 16x16 到 1024x1024 的 7 种标准分辨率尺寸。</li>
-            <li><strong>本地处理：</strong> 所有处理过程均通过浏览器在您的本地设备完成，绝不会上传图片到服务器。</li>
-          </ul>
+        <!-- 左上角标识 -->
+        <div class="absolute top-6 left-6 bg-gray-100 rounded-[16px] px-4 py-2 flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-gray-400" id="statusDot"></div>
+          <span class="text-[10px] font-black uppercase tracking-widest text-gray-500" id="statusText">AWAITING INPUT</span>
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: Information & Action Log -->
+      <aside class="w-[320px] flex-shrink-0 bg-white rounded-[28px] p-6 flex flex-col gap-6 overflow-y-auto">
+        
+        <div>
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">Guidelines Info</h2>
+          <div class="bg-gray-50 rounded-[24px] p-5 text-gray-800 text-[12px] leading-relaxed font-medium space-y-3">
+            <p><strong>Squircle Shape:</strong> 本工具自动将图片裁切为 macOS 标准的平滑圆角矩形，放弃常规直角。</p>
+            <p><strong>3D Details:</strong> 内部已合成细腻的高光与描边，以适配现代 OS 视效，但外层 UI 坚持零描边零阴影。</p>
+            <p><strong>Multi-Res:</strong> 导出的 <code>.icns</code> 将包含 16x16 至 1024x1024 共 7 种标准尺寸。</p>
+          </div>
         </div>
 
-      </div>
-    </div>
+        <div class="flex-1 flex flex-col">
+          <h2 class="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">System Log</h2>
+          <div class="bg-gray-50 rounded-[24px] p-5 flex-1 flex flex-col gap-2 overflow-y-auto" id="systemLog">
+            <div class="text-[10px] font-mono text-gray-400 uppercase">> System initialized.</div>
+            <div class="text-[10px] font-mono text-gray-400 uppercase">> Waiting for source image.</div>
+          </div>
+        </div>
+
+      </aside>
+
+    </main>
   </div>
 
   <script>
-    // 初始化图标
-    lucide.createIcons();
+    // 初始化图标，应用 GBG 规范的粗细线条
+    lucide.createIcons({
+      attrs: {
+        'stroke-width': 2.5,
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round'
+      }
+    });
 
-    // 全局状态
+    // 核心状态
     const state = {
       imageSrc: null,
       imgElement: null,
       applyStyle: true,
       paddingPct: 10,
-      bgColor: '#FFFFFF',
-      isGenerating: false,
-      successMsg: ''
+      bgColor: '#ffffff',
+      isGenerating: false
     };
 
-    const colors = ['#FFFFFF', '#000000', '#F3F4F6', 'transparent'];
+    // 背景色配置 ('transparent' 需要特殊处理渲染)
+    const colors = ['#ffffff', '#000000', '#f3f4f6', 'transparent'];
 
-    // DOM 元素引用
+    // DOM 获取
     const uploadInput = document.getElementById('uploadInput');
+    const headerUploadBtn = document.getElementById('headerUploadBtn');
+    const headerExportBtn = document.getElementById('headerExportBtn');
     const dropZone = document.getElementById('dropZone');
+    
     const settingsArea = document.getElementById('settingsArea');
     const applyStyleContainer = document.getElementById('applyStyleContainer');
-    const applyStyleCheck = document.getElementById('applyStyleCheck');
     const toggleBg = document.getElementById('toggleBg');
     const toggleDot = document.getElementById('toggleDot');
     const styleSettings = document.getElementById('styleSettings');
+    
     const paddingSlider = document.getElementById('paddingSlider');
     const paddingValueText = document.getElementById('paddingValueText');
     const colorButtonsContainer = document.getElementById('colorButtons');
-    const generateBtn = document.getElementById('generateBtn');
-    const btnTextDefault = document.getElementById('btnTextDefault');
-    const btnTextGenerating = document.getElementById('btnTextGenerating');
-    const successMsgEl = document.getElementById('successMsg');
-    const successText = document.getElementById('successText');
+    
     const emptyPreview = document.getElementById('emptyPreview');
     const canvasPreviewWrapper = document.getElementById('canvasPreviewWrapper');
     const previewCanvas = document.getElementById('previewCanvas');
+    const exportText = document.getElementById('exportText');
+    
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const systemLog = document.getElementById('systemLog');
 
-    // 初始化颜色选择器
+    // 添加系统日志
+    function addLog(msg, type = 'normal') {
+      const colorClass = type === 'success' ? 'text-gray-900 font-black' : 'text-gray-400';
+      const logLine = document.createElement('div');
+      logLine.className = `text-[10px] font-mono uppercase ${colorClass}`;
+      logLine.textContent = `> ${msg}`;
+      systemLog.appendChild(logLine);
+      systemLog.scrollTop = systemLog.scrollHeight;
+    }
+
+    // 初始化颜色选择按钮 (无 Border 规范，依靠 opacity 和 scale)
     function initColors() {
       colorButtonsContainer.innerHTML = colors.map(color => `
         <button
-          class="color-btn w-8 h-8 rounded-full border-2 transition-transform shadow-sm flex items-center justify-center"
-          style="background-color: ${color === 'transparent' ? '#fff' : color}"
+          class="color-btn w-[28px] h-[28px] rounded-[10px] transition-all flex items-center justify-center opacity-40 hover:opacity-100 ${color === 'transparent' ? 'checkerboard' : ''}"
+          style="background-color: ${color !== 'transparent' ? color : 'transparent'};"
           data-color="${color}"
-          title="${color}"
-        >
-          ${color === 'transparent' ? '<span class="text-[10px] text-red-500 font-bold rotate-45">/</span>' : ''}
-        </button>
+        ></button>
       `).join('');
 
       document.querySelectorAll('.color-btn').forEach(btn => {
@@ -217,76 +288,66 @@
           state.bgColor = e.currentTarget.dataset.color;
           updateUI();
           drawPreview();
+          addLog(`BG Color changed to ${state.bgColor}`);
         });
       });
     }
 
-    // 更新界面表现
+    // 更新界面状态
     function updateUI() {
-      // 设置面板是否可用
+      // 激活设置区域
       if (state.imageSrc) {
-        settingsArea.classList.remove('opacity-50', 'pointer-events-none');
-        settingsArea.classList.add('opacity-100');
-        emptyPreview.classList.add('hidden');
+        settingsArea.classList.remove('opacity-30', 'pointer-events-none');
+        emptyPreview.classList.add('opacity-0');
+        setTimeout(() => emptyPreview.classList.add('hidden'), 300);
         canvasPreviewWrapper.classList.remove('hidden');
+        
+        statusDot.classList.replace('bg-gray-400', 'bg-gray-800');
+        statusText.textContent = 'WORKSPACE READY';
+        statusText.classList.replace('text-gray-500', 'text-gray-900');
       }
 
-      // 样式开关状态
-      applyStyleCheck.checked = state.applyStyle;
-      if (state.applyStyle) {
-        toggleBg.classList.replace('bg-gray-300', 'bg-blue-500');
-        toggleDot.classList.add('translate-x-6');
-        styleSettings.classList.remove('hidden');
+      // 导出按钮激活状态
+      if (!state.imageSrc || state.isGenerating) {
+        headerExportBtn.classList.add('cursor-not-allowed', 'opacity-50');
+        headerExportBtn.classList.remove('bg-gray-900');
+        headerExportBtn.classList.add('bg-gray-400');
       } else {
-        toggleBg.classList.replace('bg-blue-500', 'bg-gray-300');
-        toggleDot.classList.remove('translate-x-6');
-        styleSettings.classList.add('hidden');
+        headerExportBtn.classList.remove('cursor-not-allowed', 'opacity-50');
+        headerExportBtn.classList.remove('bg-gray-400');
+        headerExportBtn.classList.add('bg-gray-900', 'hover:bg-gray-700'); // 可用时变黑强调
       }
 
-      // 外边距状态
-      paddingSlider.value = state.paddingPct;
+      // 生成中文案切换
+      exportText.textContent = state.isGenerating ? '处理中...' : '导出';
+
+      // Toggle 开关状态
+      if (state.applyStyle) {
+        toggleBg.classList.replace('bg-gray-200', 'bg-gray-800');
+        toggleDot.classList.add('translate-x-6');
+        styleSettings.classList.remove('opacity-30', 'pointer-events-none');
+      } else {
+        toggleBg.classList.replace('bg-gray-800', 'bg-gray-200');
+        toggleDot.classList.remove('translate-x-6');
+        styleSettings.classList.add('opacity-30', 'pointer-events-none');
+      }
+
+      // 滑块
       paddingValueText.textContent = state.paddingPct + '%';
 
-      // 颜色按钮激活状态
+      // 颜色按钮高亮状态 (仅用透明度和缩放)
       document.querySelectorAll('.color-btn').forEach(btn => {
         if (btn.dataset.color === state.bgColor) {
-          btn.classList.add('border-blue-500', 'scale-110');
-          btn.classList.remove('border-gray-300');
+          btn.classList.add('opacity-100', 'scale-[1.15]');
+          btn.classList.remove('opacity-40');
         } else {
-          btn.classList.remove('border-blue-500', 'scale-110');
-          btn.classList.add('border-gray-300');
+          btn.classList.remove('opacity-100', 'scale-[1.15]');
+          btn.classList.add('opacity-40');
         }
       });
-
-      // 生成按钮状态
-      if (!state.imageSrc || state.isGenerating) {
-        generateBtn.classList.add('bg-gray-300', 'cursor-not-allowed');
-        generateBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'shadow-md', 'hover:shadow-lg');
-        generateBtn.disabled = true;
-      } else {
-        generateBtn.classList.remove('bg-gray-300', 'cursor-not-allowed');
-        generateBtn.classList.add('bg-blue-600', 'hover:bg-blue-700', 'shadow-md', 'hover:shadow-lg');
-        generateBtn.disabled = false;
-      }
-
-      if (state.isGenerating) {
-        btnTextDefault.classList.add('hidden');
-        btnTextGenerating.classList.remove('hidden');
-      } else {
-        btnTextDefault.classList.remove('hidden');
-        btnTextGenerating.classList.add('hidden');
-      }
-
-      // 成功信息提示
-      if (state.successMsg) {
-        successMsgEl.classList.remove('hidden');
-        successText.textContent = state.successMsg;
-      } else {
-        successMsgEl.classList.add('hidden');
-      }
     }
 
-    // 核心绘制逻辑
+    // Canvas 绘制渲染
     function drawIcon(canvas, size, imgElement) {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, size, size);
@@ -296,54 +357,43 @@
         return;
       }
 
-      // macOS 风格参数
       const padding = size * (state.paddingPct / 100);
       const iconSize = size - (padding * 2);
       const x = padding;
       const y = padding;
-      // macOS Squircle 近似圆角率 (边长的 22.5%)
+      // macOS Squircle 规范近似
       const radius = iconSize * 0.225; 
 
-      // 1. 绘制底层阴影
+      // 绘制物理阴影 (绘制在画布内，并非 DOM 元素的 shadow)
       ctx.save();
       ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
       ctx.shadowBlur = size * 0.05;
       ctx.shadowOffsetY = size * 0.02;
-
       ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(x, y, iconSize, iconSize, radius);
-      } else {
-        ctx.rect(x, y, iconSize, iconSize); 
-      }
+      if (ctx.roundRect) ctx.roundRect(x, y, iconSize, iconSize, radius);
+      else ctx.rect(x, y, iconSize, iconSize);
       ctx.fillStyle = '#000';
       ctx.fill();
       ctx.restore();
 
-      // 2. 裁切圆角并绘制背景及图像
+      // 裁切与图片填充
       ctx.save();
       ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(x, y, iconSize, iconSize, radius);
-      } else {
-        ctx.rect(x, y, iconSize, iconSize);
-      }
+      if (ctx.roundRect) ctx.roundRect(x, y, iconSize, iconSize, radius);
+      else ctx.rect(x, y, iconSize, iconSize);
       ctx.clip();
 
       if (state.bgColor !== 'transparent') {
         ctx.fillStyle = state.bgColor;
         ctx.fill();
       }
-
       ctx.drawImage(imgElement, x, y, iconSize, iconSize);
       ctx.restore();
 
-      // 3. 绘制内部高光和边框增强 3D 质感
+      // 内侧高光
       ctx.save();
       ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(x, y, iconSize, iconSize, radius);
-      }
+      if (ctx.roundRect) ctx.roundRect(x, y, iconSize, iconSize, radius);
       ctx.lineWidth = Math.max(1, size * 0.005);
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
       ctx.stroke();
@@ -354,7 +404,6 @@
       ctx.restore();
     }
 
-    // 绘制预览图
     function drawPreview() {
       if (!state.imgElement) return;
       previewCanvas.width = 512;
@@ -362,50 +411,44 @@
       drawIcon(previewCanvas, 512, state.imgElement);
     }
 
-    // 构建 ICNS 二进制数据
+    // ICNS 封装逻辑
     async function buildICNS(canvases) {
       const parts = [];
-      let totalSize = 8; // ICNS 头部大小
+      let totalSize = 8; 
 
-      // 标准 OSType 类型 (支持的 PNG 数据节点)
       const types = {
-        16: 'ic04',
-        32: 'ic05',
-        64: 'ic11',
-        128: 'ic07',
-        256: 'ic08',
-        512: 'ic09',
-        1024: 'ic10'
+        16: 'ic04', 32: 'ic05', 64: 'ic11',
+        128: 'ic07', 256: 'ic08', 512: 'ic09', 1024: 'ic10'
       };
 
       for (const { size, canvas } of canvases) {
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
         const arrayBuffer = await blob.arrayBuffer();
         const data = new Uint8Array(arrayBuffer);
-
-        const type = types[size];
         const sectionSize = 8 + data.length;
 
-        const typeBytes = new TextEncoder().encode(type);
-        const sizeBytes = new DataView(new ArrayBuffer(4));
-        sizeBytes.setUint32(0, sectionSize);
+        parts.push({ 
+          typeBytes: new TextEncoder().encode(types[size]), 
+          sizeBytes: new Uint8Array(new DataView(new ArrayBuffer(4)).setUint32(0, sectionSize) || new ArrayBuffer(4)), // Fix chaining assignment issue for DataView
+          data 
+        });
+        
+        // Correcting the sizeBytes initialization:
+        const sizeView = new DataView(new ArrayBuffer(4));
+        sizeView.setUint32(0, sectionSize);
+        parts[parts.length - 1].sizeBytes = new Uint8Array(sizeView.buffer);
 
-        parts.push({ typeBytes, sizeBytes: new Uint8Array(sizeBytes.buffer), data });
         totalSize += sectionSize;
       }
-
-      const headerBytes = new TextEncoder().encode('icns');
-      const headerSizeBytes = new DataView(new ArrayBuffer(4));
-      headerSizeBytes.setUint32(0, totalSize);
 
       const icnsBuffer = new Uint8Array(totalSize);
       let offset = 0;
 
-      // 写入 Header
-      icnsBuffer.set(headerBytes, offset); offset += 4;
-      icnsBuffer.set(new Uint8Array(headerSizeBytes.buffer), offset); offset += 4;
+      icnsBuffer.set(new TextEncoder().encode('icns'), offset); offset += 4;
+      const headerSizeView = new DataView(new ArrayBuffer(4));
+      headerSizeView.setUint32(0, totalSize);
+      icnsBuffer.set(new Uint8Array(headerSizeView.buffer), offset); offset += 4;
 
-      // 写入每个图标段
       for (const part of parts) {
         icnsBuffer.set(part.typeBytes, offset); offset += 4;
         icnsBuffer.set(part.sizeBytes, offset); offset += 4;
@@ -415,81 +458,73 @@
       return new Blob([icnsBuffer], { type: 'application/octet-stream' });
     }
 
-    // ==========================================
-    // 修改：统一的图片处理函数 (供点击和拖拽共用)
-    // ==========================================
-    function handleFileSelection(file) {
-      if (!file) return;
-      
-      // 简单校验是否为图片
-      if (!file.type.startsWith('image/')) {
-        alert('请上传有效的图片文件 (PNG, JPG, WEBP 等)！');
-        return;
-      }
+    // --- 事件绑定 ---
 
+    // 1. 头像连击隐藏菜单 (GBG Secret Trigger)
+    let avatarClicks = 0;
+    let avatarTimer = null;
+    document.getElementById('header_avatar_image').addEventListener('click', () => {
+      avatarClicks++;
+      if (avatarClicks === 1) {
+        avatarTimer = setTimeout(() => { avatarClicks = 0; }, 600);
+      }
+      if (avatarClicks === 3) {
+        clearTimeout(avatarTimer);
+        avatarClicks = 0;
+        document.getElementById('secretMenu').classList.toggle('hidden');
+        addLog('Developer UI rules menu toggled.');
+      }
+    });
+
+    // 2. 文件上传处理
+    function handleFile(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      addLog(`Reading file: ${file.name}`);
       const reader = new FileReader();
-      reader.onload = (event) => {
-        state.imageSrc = event.target.result;
-        state.successMsg = '';
+      reader.onload = (e) => {
+        state.imageSrc = e.target.result;
         const img = new Image();
         img.onload = () => {
           state.imgElement = img;
           updateUI();
           drawPreview();
+          addLog('Image loaded into canvas.', 'success');
         };
         img.src = state.imageSrc;
       };
       reader.readAsDataURL(file);
     }
 
-    // 1. 点击上传事件
+    // Header 按钮触发文件选框
+    headerUploadBtn.addEventListener('click', () => uploadInput.click());
+    
     uploadInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      handleFileSelection(file);
-      // 【关键修复】清空 input 值，防止用户重复上传同一张图时没反应
-      e.target.value = ''; 
+      handleFile(e.target.files[0]);
+      e.target.value = '';
     });
 
-    // 2. 拖拽上传事件 (Drag and Drop)
-    // 阻止浏览器默认打开图片的行为
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-      dropZone.addEventListener(eventName, preventDefaults, false);
-      document.body.addEventListener(eventName, preventDefaults, false);
+    // 拖拽支持 (作用于 DropZone 或 Body)
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+      dropZone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); });
     });
-
-    function preventDefaults(e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-
-    // 拖入拖出时的 UI 高亮效果
-    ['dragenter', 'dragover'].forEach(eventName => {
-      dropZone.addEventListener(eventName, () => {
-        dropZone.classList.add('border-blue-500', 'bg-blue-50');
-      }, false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-      dropZone.addEventListener(eventName, () => {
-        dropZone.classList.remove('border-blue-500', 'bg-blue-50');
-      }, false);
-    });
-
-    // 处理拖拽松开的图片文件
+    dropZone.addEventListener('dragover', () => dropZone.classList.add('bg-gray-100'));
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-gray-100'));
     dropZone.addEventListener('drop', (e) => {
-      const dt = e.dataTransfer;
-      const file = dt.files[0];
-      handleFileSelection(file);
+      dropZone.classList.remove('bg-gray-100');
+      handleFile(e.dataTransfer.files[0]);
+    });
+    // 点击空区域也触发上传
+    dropZone.addEventListener('click', (e) => {
+      if (!state.imageSrc) uploadInput.click();
     });
 
-
-    // 其他事件监听
-    applyStyleContainer.addEventListener('click', (e) => {
-      // 防止点击触发默认的 checkbox 行为，我们手动控制状态
-      e.preventDefault(); 
+    // 3. 设置调整区
+    applyStyleContainer.addEventListener('click', () => {
+      if(!state.imageSrc) return;
       state.applyStyle = !state.applyStyle;
       updateUI();
       drawPreview();
+      addLog(`macOS style applied: ${state.applyStyle}`);
     });
 
     paddingSlider.addEventListener('input', (e) => {
@@ -497,12 +532,17 @@
       updateUI();
       drawPreview();
     });
+    paddingSlider.addEventListener('change', () => {
+      addLog(`Padding adjusted to ${state.paddingPct}%`);
+    });
 
-    generateBtn.addEventListener('click', async () => {
+    // 4. 生成与导出逻辑
+    headerExportBtn.addEventListener('click', async () => {
       if (!state.imgElement || state.isGenerating) return;
+      
       state.isGenerating = true;
-      state.successMsg = '';
       updateUI();
+      addLog('Generating multi-resolution canvases...');
 
       try {
         const sizes = [16, 32, 64, 128, 256, 512, 1024];
@@ -514,9 +554,9 @@
           return { size, canvas };
         });
 
+        addLog('Encoding .icns binary format...');
         const icnsBlob = await buildICNS(canvases);
         
-        // 触发下载
         const url = URL.createObjectURL(icnsBlob);
         const a = document.createElement('a');
         a.href = url;
@@ -526,20 +566,19 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        state.successMsg = '导出成功！已保存为 app.icns';
+        addLog('Export successful! (app.icns)', 'success');
       } catch (error) {
-        console.error('Error generating ICNS:', error);
-        alert('生成文件时出错，请确保浏览器支持相关 API。');
+        console.error(error);
+        addLog('Error encoding ICNS format.');
       } finally {
         state.isGenerating = false;
         updateUI();
       }
     });
 
-    // 页面启动加载
+    // 初始化
     initColors();
     updateUI();
-
   </script>
 </body>
 </html>
